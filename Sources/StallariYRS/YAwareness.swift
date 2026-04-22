@@ -30,7 +30,7 @@ public final class YAwareness: @unchecked Sendable {
         guard let h = handle else { return }
         data.withUnsafeBytes { rawBuf in
             guard let ptr = rawBuf.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-            yrs_awareness_set_local_state(h, ptr, rawBuf.count)
+            yrs_awareness_set_local_state(h, ptr, UInt(rawBuf.count))
         }
     }
 
@@ -41,7 +41,7 @@ public final class YAwareness: @unchecked Sendable {
             guard let ptr = rawBuf.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return -1
             }
-            return yrs_awareness_apply_update(h, ptr, rawBuf.count)
+            return yrs_awareness_apply_update(h, ptr, UInt(rawBuf.count))
         }
         if result != 0 {
             throw YRSError.decodingFailed
@@ -51,11 +51,11 @@ public final class YAwareness: @unchecked Sendable {
     /// Encode the local awareness state for transmission to peers.
     public func encodeUpdate() throws -> Data {
         guard let h = handle else { throw YRSError.documentFreed }
-        var len: Int = 0
+        var len: UInt = 0
         guard let buf = yrs_awareness_encode_update(h, &len), len > 0 else {
             throw YRSError.encodingFailed
         }
-        let data = Data(bytes: buf, count: len)
+        let data = Data(bytes: buf, count: Int(len))
         yrs_buf_free(buf)
         return data
     }
@@ -70,11 +70,11 @@ public final class YAwareness: @unchecked Sendable {
     /// Returns nil if the client is unknown.
     public func clientState(for clientID: UInt64) -> Data? {
         guard let h = handle else { return nil }
-        var len: Int = 0
+        var len: UInt = 0
         guard let buf = yrs_awareness_get_client_state(h, clientID, &len), len > 0 else {
             return nil
         }
-        let data = Data(bytes: buf, count: len)
+        let data = Data(bytes: buf, count: Int(len))
         yrs_buf_free(buf)
         return data
     }

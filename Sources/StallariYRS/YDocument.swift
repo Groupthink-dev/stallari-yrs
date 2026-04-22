@@ -52,11 +52,11 @@ public final class YDocument: @unchecked Sendable {
     /// Encode the full document state as a binary update (V2 encoding).
     public func encodeStateAsUpdate() throws -> Data {
         guard let h = handle else { throw YRSError.documentFreed }
-        var len: Int = 0
+        var len: UInt = 0
         guard let buf = yrs_doc_encode_state_as_update_v2(h, &len), len > 0 else {
             throw YRSError.encodingFailed
         }
-        let data = Data(bytes: buf, count: len)
+        let data = Data(bytes: buf, count: Int(len))
         yrs_buf_free(buf)
         return data
     }
@@ -68,7 +68,7 @@ public final class YDocument: @unchecked Sendable {
             guard let ptr = rawBuf.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return -1
             }
-            return yrs_doc_apply_update_v2(h, ptr, rawBuf.count)
+            return yrs_doc_apply_update_v2(h, ptr, UInt(rawBuf.count))
         }
         if result != 0 {
             throw YRSError.decodingFailed
@@ -78,11 +78,11 @@ public final class YDocument: @unchecked Sendable {
     /// Encode the document's state vector for sync negotiation.
     public func encodeStateVector() throws -> Data {
         guard let h = handle else { throw YRSError.documentFreed }
-        var len: Int = 0
+        var len: UInt = 0
         guard let buf = yrs_doc_encode_state_vector(h, &len), len > 0 else {
             throw YRSError.encodingFailed
         }
-        let data = Data(bytes: buf, count: len)
+        let data = Data(bytes: buf, count: Int(len))
         yrs_buf_free(buf)
         return data
     }
@@ -91,17 +91,17 @@ public final class YDocument: @unchecked Sendable {
     /// state vector to the current document state (V2 encoding).
     public func encodeDiff(from stateVector: Data) throws -> Data {
         guard let h = handle else { throw YRSError.documentFreed }
-        var outLen: Int = 0
+        var outLen: UInt = 0
         let buf = stateVector.withUnsafeBytes { rawBuf -> UnsafeMutablePointer<UInt8>? in
             guard let ptr = rawBuf.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return nil
             }
-            return yrs_doc_encode_diff_v2(h, ptr, rawBuf.count, &outLen)
+            return yrs_doc_encode_diff_v2(h, ptr, UInt(rawBuf.count), &outLen)
         }
         guard let buf, outLen > 0 else {
             throw YRSError.encodingFailed
         }
-        let data = Data(bytes: buf, count: outLen)
+        let data = Data(bytes: buf, count: Int(outLen))
         yrs_buf_free(buf)
         return data
     }

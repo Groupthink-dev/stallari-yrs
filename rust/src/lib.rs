@@ -1,6 +1,7 @@
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, GetString, Options, ReadTxn, Text, Transact};
@@ -25,9 +26,7 @@ pub extern "C" fn yrs_doc_new() -> *mut YrsDoc {
 /// This is important for deterministic author attribution.
 #[no_mangle]
 pub extern "C" fn yrs_doc_new_with_client_id(client_id: u64) -> *mut YrsDoc {
-    let mut opts = Options::default();
-    opts.client_id = client_id;
-    let doc = Doc::with_options(opts);
+    let doc = Doc::with_client_id(client_id);
     Box::into_raw(Box::new(YrsDoc { doc }))
 }
 
@@ -48,7 +47,7 @@ pub unsafe extern "C" fn yrs_doc_free(doc: *mut YrsDoc) {
 /// `doc` must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn yrs_doc_client_id(doc: *const YrsDoc) -> u64 {
-    (*doc).doc.options().client_id
+    (*doc).doc.client_id()
 }
 
 /// Encode the full document state as a binary update (V2 encoding).
@@ -64,9 +63,7 @@ pub unsafe extern "C" fn yrs_doc_encode_state_as_update_v2(
     let txn = (*doc).doc.transact();
     let update = txn.encode_state_as_update_v2(&yrs::StateVector::default());
     *out_len = update.len();
-    let ptr = update.as_ptr() as *mut u8;
-    let buf = libc::malloc(update.len()) as *mut u8;
-    ptr::copy_nonoverlapping(ptr, buf, update.len());
+    let buf = vec_to_malloc_buf(&update);
     buf
 }
 
@@ -106,9 +103,7 @@ pub unsafe extern "C" fn yrs_doc_encode_state_vector(
     let txn = (*doc).doc.transact();
     let sv = txn.state_vector().encode_v1();
     *out_len = sv.len();
-    let buf = libc::malloc(sv.len()) as *mut u8;
-    ptr::copy_nonoverlapping(sv.as_ptr(), buf, sv.len());
-    buf
+    vec_to_malloc_buf(&sv)
 }
 
 /// Compute the diff (update) needed to bring a peer from `sv_data`
@@ -136,9 +131,7 @@ pub unsafe extern "C" fn yrs_doc_encode_diff_v2(
     let txn = (*doc).doc.transact();
     let diff = txn.encode_state_as_update_v2(&sv);
     *out_len = diff.len();
-    let buf = libc::malloc(diff.len()) as *mut u8;
-    ptr::copy_nonoverlapping(diff.as_ptr(), buf, diff.len());
-    buf
+    vec_to_malloc_buf(&diff)
 }
 
 // ---------------------------------------------------------------------------
@@ -146,14 +139,13 @@ pub unsafe extern "C" fn yrs_doc_encode_diff_v2(
 // ---------------------------------------------------------------------------
 
 /// Opaque handle to a Yrs Text type reference.
-/// The text is owned by its parent YrsDoc — do not free independently.
+/// Stores the name used to look up the text root from the document.
 pub struct YrsTextRef {
-    name: String,
+    name: Arc<str>,
 }
 
 /// Get or create a named text type from the document.
 /// The returned handle is valid for the lifetime of the document.
-/// Do NOT free it with `yrs_text_free` — it is managed by the document.
 ///
 /// # Safety
 /// `doc` must be a valid pointer. `name` must be a valid C string.
@@ -162,9 +154,9 @@ pub unsafe extern "C" fn yrs_doc_get_text(
     doc: *const YrsDoc,
     name: *const c_char,
 ) -> *mut YrsTextRef {
-    let name_str = CStr::from_ptr(name).to_string_lossy().into_owned();
+    let name_str: Arc<str> = CStr::from_ptr(name).to_string_lossy().into_owned().into();
     // Touch the text root to ensure it exists
-    let _text = (*doc).doc.get_or_insert_text(&name_str);
+    let _text = (*doc).doc.get_or_insert_text(Arc::clone(&name_str));
     Box::into_raw(Box::new(YrsTextRef { name: name_str }))
 }
 
@@ -193,7 +185,7 @@ pub unsafe extern "C" fn yrs_text_insert(
     value: *const c_char,
 ) -> i32 {
     let val = CStr::from_ptr(value).to_string_lossy();
-    let text_ref = (*doc).doc.get_or_insert_text(&(*text).name);
+    let text_ref = (*doc).doc.get_or_insert_text(Arc::clone(&(*text).name));
     let mut txn = (*doc).doc.transact_mut();
     text_ref.insert(&mut txn, index, &val);
     0
@@ -211,7 +203,7 @@ pub unsafe extern "C" fn yrs_text_delete(
     index: u32,
     length: u32,
 ) -> i32 {
-    let text_ref = (*doc).doc.get_or_insert_text(&(*text).name);
+    let text_ref = (*doc).doc.get_or_insert_text(Arc::clone(&(*text).name));
     let mut txn = (*doc).doc.transact_mut();
     text_ref.remove_range(&mut txn, index, length);
     0
@@ -227,7 +219,7 @@ pub unsafe extern "C" fn yrs_text_to_string(
     doc: *const YrsDoc,
     text: *const YrsTextRef,
 ) -> *mut c_char {
-    let text_ref = (*doc).doc.get_or_insert_text(&(*text).name);
+    let text_ref = (*doc).doc.get_or_insert_text(Arc::clone(&(*text).name));
     let txn = (*doc).doc.transact();
     let content = text_ref.get_string(&txn);
     match CString::new(content) {
@@ -242,7 +234,7 @@ pub unsafe extern "C" fn yrs_text_to_string(
 /// `doc` must be a valid pointer. `text` must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn yrs_text_len(doc: *const YrsDoc, text: *const YrsTextRef) -> u32 {
-    let text_ref = (*doc).doc.get_or_insert_text(&(*text).name);
+    let text_ref = (*doc).doc.get_or_insert_text(Arc::clone(&(*text).name));
     let txn = (*doc).doc.transact();
     text_ref.len(&txn)
 }
@@ -390,6 +382,14 @@ pub unsafe extern "C" fn yrs_awareness_get_client_state(
 // ---------------------------------------------------------------------------
 // Memory management helpers
 // ---------------------------------------------------------------------------
+
+/// Allocate a libc buffer and copy bytes into it.
+/// Caller must free with `yrs_buf_free`.
+unsafe fn vec_to_malloc_buf(data: &[u8]) -> *mut u8 {
+    let buf = libc::malloc(data.len()) as *mut u8;
+    ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+    buf
+}
 
 /// Free a buffer returned by any `yrs_*` function.
 ///
