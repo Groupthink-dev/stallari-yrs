@@ -1,0 +1,16 @@
+[parse]
+parse_deps = false
+
+[export]
+include = []
+exclude = []
+
+[fn]
+prefix = ""
+postfix = ""
+
+[enum]
+rename_variants = "ScreamingSnakeCase"
+
+[struct]
+rename_fields = "None"

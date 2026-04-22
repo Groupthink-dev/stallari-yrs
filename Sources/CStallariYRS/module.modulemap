@@ -1,0 +1,5 @@
+module CStallariYRS {
+    header "include/yrs_ffi.h"
+    link "stallari_yrs"
+    export *
+}

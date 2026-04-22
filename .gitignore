@@ -1,0 +1,12 @@
+# Rust build artifacts
+rust/target/
+
+# Compiled static libraries (rebuilt from source)
+lib/
+
+# Swift build
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
