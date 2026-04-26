@@ -18,7 +18,8 @@ let package = Package(
             publicHeadersPath: "include",
             linkerSettings: [
                 .linkedLibrary("stallari_yrs"),
-                .unsafeFlags(["-L\(Context.packageDirectory)/lib"]),
+                .unsafeFlags(["-L\(Context.packageDirectory)/lib"], .when(platforms: [.macOS])),
+                .unsafeFlags(["-L\(Context.packageDirectory)/lib/ios"], .when(platforms: [.iOS])),
             ]
         ),
 
