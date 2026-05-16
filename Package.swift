@@ -11,16 +11,14 @@ let package = Package(
         .library(name: "StallariYRS", targets: ["StallariYRS"]),
     ],
     targets: [
-        // C module wrapping the Rust static library
-        .target(
+        // C module wrapping the Rust static library — binary-distributed via
+        // GH Release per DD-295 Phase C amendment § "Binary-distributed siblings".
+        // Bumping: `make release-xcframework` → capture SHA-256 → tag stallari-yrs →
+        // bump url + checksum below in lockstep (release-sibling.sh handles this).
+        .binaryTarget(
             name: "CStallariYRS",
-            path: "Sources/CStallariYRS",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                .linkedLibrary("stallari_yrs"),
-                .unsafeFlags(["-L\(Context.packageDirectory)/lib"], .when(platforms: [.macOS])),
-                .unsafeFlags(["-L\(Context.packageDirectory)/lib/ios"], .when(platforms: [.iOS])),
-            ]
+            url: "https://github.com/groupthink-dev/stallari-yrs/releases/download/0.1.0/stallari_yrs.xcframework.zip",
+            checksum: "2e71867aa31d531781103bcea5b562a038619fcd4e92ab59663ad2531e61fb45"
         ),
 
         // Swift wrapper providing idiomatic types

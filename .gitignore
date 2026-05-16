@@ -4,6 +4,9 @@ rust/target/
 # Compiled static libraries (rebuilt from source)
 lib/
 
+# xcframework build output (per-release, regenerated via `make release-xcframework`)
+build/
+
 # Swift build
 .build/
 .swiftpm/
