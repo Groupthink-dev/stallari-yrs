@@ -17,8 +17,8 @@ let package = Package(
         // bump url + checksum below in lockstep (release-sibling.sh handles this).
         .binaryTarget(
             name: "CStallariYRS",
-            url: "https://github.com/groupthink-dev/stallari-yrs/releases/download/0.1.0/stallari_yrs.xcframework.zip",
-            checksum: "2e71867aa31d531781103bcea5b562a038619fcd4e92ab59663ad2531e61fb45"
+            url: "https://github.com/groupthink-dev/stallari-yrs/releases/download/0.1.1/stallari_yrs.xcframework.zip",
+            checksum: "1d5f14c250d0db606a9c8607729a4d1fcb88c545ba68e86d176fc05987a6e8e5"
         ),
 
         // Swift wrapper providing idiomatic types

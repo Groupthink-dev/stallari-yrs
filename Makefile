@@ -76,11 +76,18 @@ release-xcframework: clean-xcframework
 	@echo "==> Regenerating headers..."
 	$(MAKE) headers
 	@mkdir -p $(BUILD_DIR)
+	@echo "==> Staging headers + module.modulemap for xcframework consumption..."
+	@rm -rf $(BUILD_DIR)/staged-headers
+	@mkdir -p $(BUILD_DIR)/staged-headers
+	@cp $(HEADER_DIR)/yrs_ffi.h $(BUILD_DIR)/staged-headers/
+	@printf 'module CStallariYRS {\n    header "yrs_ffi.h"\n    link "stallari_yrs"\n    export *\n}\n' > $(BUILD_DIR)/staged-headers/module.modulemap
 	@echo "==> xcodebuild -create-xcframework..."
 	xcodebuild -create-xcframework \
-	    -library $(LIB_DIR)/$(LIB_NAME)        -headers $(HEADER_DIR) \
-	    -library $(LIB_DIR)/ios/$(LIB_NAME)    -headers $(HEADER_DIR) \
+	    -library $(LIB_DIR)/$(LIB_NAME)        -headers $(BUILD_DIR)/staged-headers \
+	    -library $(LIB_DIR)/ios/$(LIB_NAME)    -headers $(BUILD_DIR)/staged-headers \
 	    -output  $(BUILD_DIR)/$(XCFRAMEWORK_NAME)
+	@echo "==> Normalising Info.plist (sort AvailableLibraries for deterministic ordering)..."
+	@python3 -c "import plistlib, sys; p = plistlib.load(open('$(BUILD_DIR)/$(XCFRAMEWORK_NAME)/Info.plist','rb')); p['AvailableLibraries'].sort(key=lambda x: x['LibraryIdentifier']); plistlib.dump(p, open('$(BUILD_DIR)/$(XCFRAMEWORK_NAME)/Info.plist','wb'), sort_keys=True)"
 	@echo "==> Normalising mtimes for deterministic zip..."
 	find $(BUILD_DIR)/$(XCFRAMEWORK_NAME) -exec touch -t 197001010000.00 {} +
 	@echo "==> Zipping (deterministic: -X strips xattrs, -D strips dir entries, TZ=UTC + mtime-normalised input)..."
